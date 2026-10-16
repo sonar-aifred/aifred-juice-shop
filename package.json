@@ -76,6 +76,12 @@
     "vagrant": "cd vagrant && vagrant up",
     "sbom": "cyclonedx-npm --omit=dev --output-format=JSON --output-file=bom.json"
   },
+  "overrides": {
+    "moment": "2.31.0",
+    "handlebars": "4.7.10",
+    "tar": "7.5.22",
+    "crypto-js": "3.3.0"
+  },
   "nyc": {
     "extends": "@istanbuljs/nyc-config-typescript",
     "all": true,
@@ -143,7 +149,7 @@
     "pug": "^3.0.3",
     "replace": "^1.2.2",
     "sanitize-filename": "^1.6.3",
-    "sanitize-html": "1.4.2",
+    "sanitize-html": "1.27.5",
     "semver": "^7.6.3",
     "sequelize": "^6.37.3",
     "serve-index": "^1.9.1",
