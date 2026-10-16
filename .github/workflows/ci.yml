@@ -1,16 +1,5 @@
 name: "CI/CD Pipeline"
 on:
-  push:
-    branches-ignore:
-      - l10n_develop
-      - gh-pages
-    paths-ignore:
-      - '*.md'
-      - 'LICENSE'
-      - 'monitoring/grafana-dashboard.json'
-      - 'screenshots/**'
-    tags-ignore:
-      - '*'
   pull_request:
     paths-ignore:
       - '*.md'
