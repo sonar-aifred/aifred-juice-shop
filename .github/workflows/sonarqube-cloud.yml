@@ -1,0 +1,40 @@
+name: "SonarQube Cloud"
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    types: [opened, synchronize, reopened]
+env:
+  NODE_DEFAULT_VERSION: 24
+  NPM_VERSION: 11.19.1
+  NODE_OPTIONS: "--max_old_space_size=4096"
+jobs:
+  coverage-and-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Check out Git repository"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.0.1
+        with:
+          fetch-depth: 0 # full history for accurate blame and new code detection
+      - name: "Use Node.js"
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 #v7.0.0
+        with:
+          node-version: ${{ env.NODE_DEFAULT_VERSION }}
+      - name: "Install application"
+        run: |
+          npm install --global npm@${{ env.NPM_VERSION }}
+      - name: "Run server unit tests with coverage"
+        run: npm run test:server:coverage
+      - name: "Run API tests with coverage"
+        env:
+          NODE_ENV: test
+        run: npm run test:api:coverage
+      - name: "Run frontend unit tests with coverage"
+        run: npm run test:frontend:coverage
+      - name: "Make frontend coverage paths relative to project root"
+        run: sed -i 's|^SF:|SF:frontend/|' frontend/coverage/frontend/lcov.info
+      - name: "SonarQube Cloud scan"
+        uses: SonarSource/sonarqube-scan-action@c7ee0f9df90b7aa20e8dcf9695dcfe2e7da5b4f2 #v7.2.1
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
