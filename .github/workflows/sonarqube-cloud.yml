@@ -24,7 +24,7 @@ jobs:
       - name: "Install application"
         run: |
           npm install --global npm@${{ env.NPM_VERSION }}
-          npm install
+          npm ci --ignore-scripts
       - name: "Run server unit tests with coverage"
         run: npm run test:server:coverage
       - name: "Run API tests with coverage"
