@@ -26,8 +26,8 @@ jobs:
           npm ci --ignore-scripts
           npm rebuild sqlite3 # native module, needs its install script
           npm ci --ignore-scripts --prefix frontend
-      - name: "Build frontend"
-        run: npm run build:frontend
+      - name: "Build frontend and server"
+        run: npm run build
       - name: "Run server unit tests with coverage"
         run: npm run test:server:coverage
       - name: "Run API tests with coverage"
