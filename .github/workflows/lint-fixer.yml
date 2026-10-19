@@ -7,6 +7,7 @@ on: [push]
 
 jobs:
   LMLFTFY:
+    if: false # workflow disabled
     runs-on: ubuntu-latest
     steps:
     - name: "Check out Git repository"

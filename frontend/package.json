@@ -92,7 +92,9 @@
     "ng2-file-upload": {
       "@angular/core": "$@angular/core",
       "@angular/common": "$@angular/common"
-    }
+    },
+    "ws": "8.21.0",
+    "postcss-selector-parser": "7.1.6"
   },
   "allowScripts": {
     "@fortawesome/fontawesome-common-types": false,

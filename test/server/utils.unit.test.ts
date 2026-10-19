@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { describe, it } from 'node:test'
+import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ChallengeModel } from '@juice-shop/models/challenge'
 import fs from 'node:fs'
+import http from 'node:http'
+import { type AddressInfo } from 'node:net'
 import * as utils from '../../lib/utils'
 import { ProxyAgent } from 'proxy-agent'
 
@@ -100,6 +102,79 @@ void describe('utils', () => {
       assert.equal(downloaded, true)
       assert.ok(agent instanceof ProxyAgent)
       assert.equal(await agent.getProxyForUrl('https://example.com/avatar.png', undefined as never), 'http://proxy.example:8080')
+    })
+
+    void describe('with default downloader', () => {
+      let server: http.Server
+      let baseUrl: string
+
+      before(async () => {
+        server = http.createServer((req, res) => {
+          if (req.url === '/file') {
+            res.end('content')
+          } else if (req.url === '/redirect') {
+            res.writeHead(302, { location: '/file' })
+            res.end()
+          } else if (req.url === '/no-location') {
+            res.writeHead(301)
+            res.end()
+          } else if (req.url === '/loop') {
+            res.writeHead(302, { location: '/loop' })
+            res.end()
+          } else {
+            res.writeHead(404, 'Not Found')
+            res.end()
+          }
+        })
+        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+        baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+      })
+
+      after(() => {
+        server.close()
+      })
+
+      void it('writes the downloaded content to the destination file', async (t) => {
+        const writeFileSync = t.mock.method(fs, 'writeFileSync', () => undefined)
+
+        assert.equal(await utils.downloadToFile(`${baseUrl}/file`, 'dest'), true)
+        assert.equal(writeFileSync.mock.calls[0]?.arguments[0], 'dest')
+        assert.equal(writeFileSync.mock.calls[0]?.arguments[1]?.toString(), 'content')
+      })
+
+      void it('follows redirects', async (t) => {
+        const writeFileSync = t.mock.method(fs, 'writeFileSync', () => undefined)
+
+        assert.equal(await utils.downloadToFile(`${baseUrl}/redirect`, 'dest'), true)
+        assert.equal(writeFileSync.mock.calls[0]?.arguments[1]?.toString(), 'content')
+      })
+
+      void it('gives up after too many redirects', async (t) => {
+        const writeFileSync = t.mock.method(fs, 'writeFileSync', () => undefined)
+
+        assert.equal(await utils.downloadToFile(`${baseUrl}/loop`, 'dest'), false)
+        assert.equal(writeFileSync.mock.calls.length, 0)
+      })
+
+      void it('returns false for a redirect without a location header', async (t) => {
+        const writeFileSync = t.mock.method(fs, 'writeFileSync', () => undefined)
+
+        assert.equal(await utils.downloadToFile(`${baseUrl}/no-location`, 'dest'), false)
+        assert.equal(writeFileSync.mock.calls.length, 0)
+      })
+
+      void it('returns false for a non-2xx response', async (t) => {
+        const writeFileSync = t.mock.method(fs, 'writeFileSync', () => undefined)
+
+        assert.equal(await utils.downloadToFile(`${baseUrl}/missing`, 'dest'), false)
+        assert.equal(writeFileSync.mock.calls.length, 0)
+      })
+
+      void it('returns false when the connection fails', async (t) => {
+        t.mock.method(fs, 'writeFileSync', () => undefined)
+
+        assert.equal(await utils.downloadToFile('http://127.0.0.1:1/file', 'dest'), false)
+      })
     })
   })
 
