@@ -5,7 +5,7 @@
 
 // @ts-expect-error FIXME no typescript definitions for z85 :(
 import z85 from 'z85'
-import { describe, it } from 'node:test'
+import { describe, it, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import * as security from '../../lib/insecurity'
 import type { UserModel } from '@juice-shop/models/user'
@@ -336,12 +336,90 @@ void describe('insecurity', () => {
       assert.ok(nextCalled)
     })
 
-    void it('isAuthorized returns a middleware', () => {
-      assert.equal(typeof security.isAuthorized(), 'function')
+    void it('updateAuthenticatedUsers should store the user of a valid token and set the cookie', () => {
+      const token = security.authorize({ data: { id: 5 } })
+      const req = { cookies: {}, headers: { authorization: `Bearer ${token}` } } as any
+      const cookie = mock.fn()
+      const next = mock.fn()
+      security.updateAuthenticatedUsers()(req, { cookie } as any, next)
+      assert.equal((security.authenticatedUsers.get(token) as any).data.id, 5)
+      assert.equal(cookie.mock.calls[0].arguments[1], token)
+      assert.equal(next.mock.calls.length, 1)
     })
 
-    void it('denyAll returns a middleware', () => {
-      assert.equal(typeof security.denyAll(), 'function')
+    void it('updateAuthenticatedUsers should ignore an invalid token', () => {
+      const token = 'not.a.token'
+      const req = { cookies: { token }, headers: {} } as any
+      const cookie = mock.fn()
+      const next = mock.fn()
+      security.updateAuthenticatedUsers()(req, { cookie } as any, next)
+      assert.equal(security.authenticatedUsers.get(token), undefined)
+      assert.equal(cookie.mock.calls.length, 0)
+      assert.equal(next.mock.calls.length, 1)
+    })
+
+    void it('updateAuthenticatedUsers should ignore a valid token without user data', () => {
+      const token = security.authorize({ foo: 'bar' })
+      const req = { cookies: {}, headers: { authorization: `Bearer ${token}` } } as any
+      const cookie = mock.fn()
+      security.updateAuthenticatedUsers()(req, { cookie } as any, () => {})
+      assert.equal(security.authenticatedUsers.get(token), undefined)
+      assert.equal(cookie.mock.calls.length, 0)
+    })
+
+    void it('isAuthorized should call next() for a valid token', () => {
+      const token = security.authorize({ data: { id: 1 } })
+      const req = { headers: { authorization: `Bearer ${token}` } } as any
+      const next = mock.fn()
+      const res = { status: mock.fn(), json: mock.fn() } as any
+      security.isAuthorized()(req, res, next)
+      assert.equal(next.mock.calls.length, 1)
+      assert.equal(res.status.mock.calls.length, 0)
+    })
+
+    void it('isAuthorized should return 401 if no token is present', () => {
+      const res = { status: mock.fn(() => res), json: mock.fn() } as any
+      const next = mock.fn()
+      security.isAuthorized()({ headers: {} } as any, res, next)
+      assert.equal(next.mock.calls.length, 0)
+      assert.equal(res.status.mock.calls[0].arguments[0], 401)
+      assert.deepEqual(res.json.mock.calls[0].arguments[0], { status: 'error', message: 'No authorization token was found' })
+    })
+
+    void it('isAuthorized should return 401 if the token is invalid', () => {
+      const res = { status: mock.fn(() => res), json: mock.fn() } as any
+      const next = mock.fn()
+      security.isAuthorized()({ headers: { authorization: 'Bearer invalid' } } as any, res, next)
+      assert.equal(next.mock.calls.length, 0)
+      assert.equal(res.status.mock.calls[0].arguments[0], 401)
+      assert.deepEqual(res.json.mock.calls[0].arguments[0], { status: 'error', message: 'invalid token' })
+    })
+
+    void it('denyAll should always return 401', () => {
+      const res = { status: mock.fn(() => res), json: mock.fn() } as any
+      security.denyAll()({} as any, res)
+      assert.equal(res.status.mock.calls[0].arguments[0], 401)
+      assert.deepEqual(res.json.mock.calls[0].arguments[0], { status: 'error', message: 'invalid token' })
+    })
+  })
+
+  void describe('verify', () => {
+    void it('returns true for a token signed with the private key', () => {
+      assert.equal(security.verify(security.authorize({ data: { id: 1 } })), true)
+    })
+
+    void it('returns false for an empty token', () => {
+      assert.equal(security.verify(''), false)
+    })
+
+    void it('returns false for a malformed token', () => {
+      assert.equal(security.verify('invalid'), false)
+    })
+
+    void it('returns false for a tampered token', () => {
+      const [header, , signature] = security.authorize({ data: { id: 1 } }).split('.')
+      const payload = Buffer.from(JSON.stringify({ data: { id: 2 } })).toString('base64url')
+      assert.equal(security.verify(`${header}.${payload}.${signature}`), false)
     })
   })
 })
