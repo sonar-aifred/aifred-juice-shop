@@ -7,7 +7,6 @@ import fs from 'node:fs'
 import crypto from 'node:crypto'
 import { type Request, type Response, type NextFunction } from 'express'
 import { type UserModel } from '@juice-shop/models/user'
-import { expressjwt as expressJwt } from 'express-jwt'
 import jwt from 'jsonwebtoken'
 import jws from 'jws'
 import sanitizeHtmlLib from 'sanitize-html'
@@ -49,14 +48,24 @@ export const cutOffPoisonNullByte = (str: string) => {
   return str
 }
 
-export const isAuthorized = () => expressJwt({ secret: publicKey, algorithms: ['RS256'] })
-export const denyAll = () => expressJwt({ secret: '' + Math.random(), algorithms: ['HS256'] })
 export const authorize = (user = {}) => jwt.sign(user, privateKey, { expiresIn: '6h', algorithm: 'RS256', allowInsecureKeySizes: true })
 export const verify = (token: string) => {
   const algorithm = token ? jws.decode(token)?.header?.alg : undefined
   return algorithm ? jws.verify(token, algorithm, publicKey) : false
 }
 export const decode = (token: string) => { return jws.decode(token)?.payload }
+
+export const isAuthorized = () => (req: Request, res: Response, next: NextFunction) => {
+  const token = utils.jwtFrom(req)
+  if (token && verify(token)) {
+    next()
+  } else {
+    res.status(401).json({ status: 'error', message: token ? 'invalid token' : 'No authorization token was found' })
+  }
+}
+export const denyAll = () => (req: Request, res: Response) => {
+  res.status(401).json({ status: 'error', message: 'invalid token' })
+}
 
 export const sanitizeHtml = (html: string) => sanitizeHtmlLib(html)
 export const sanitizeLegacy = (input = '') => input.replace(/<(?:\w+)\W+?[\w]/gi, '')
@@ -189,12 +198,11 @@ export const appendUserId = () => {
 export const updateAuthenticatedUsers = () => (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.token || utils.jwtFrom(req)
   if (token && authenticatedUsers.get(token) === undefined) {
-    jwt.verify(token, publicKey, (err: Error | null, decoded: any) => {
-      if (err === null && decoded?.data !== undefined) {
-        authenticatedUsers.put(token, decoded)
-        res.cookie('token', token)
-      }
-    })
+    const decoded = verify(token) ? decode(token) : undefined
+    if (decoded?.data !== undefined) {
+      authenticatedUsers.put(token, decoded)
+      res.cookie('token', token)
+    }
   }
   next()
 }
