@@ -115,6 +115,9 @@ void describe('utils', () => {
           } else if (req.url === '/redirect') {
             res.writeHead(302, { location: '/file' })
             res.end()
+          } else if (req.url === '/no-location') {
+            res.writeHead(301)
+            res.end()
           } else if (req.url === '/loop') {
             res.writeHead(302, { location: '/loop' })
             res.end()
@@ -135,21 +138,28 @@ void describe('utils', () => {
         const writeFileSync = t.mock.method(fs, 'writeFileSync', () => undefined)
 
         assert.equal(await utils.downloadToFile(`${baseUrl}/file`, 'dest'), true)
-        assert.equal(writeFileSync.mock.calls[0].arguments[0], 'dest')
-        assert.equal(writeFileSync.mock.calls[0].arguments[1].toString(), 'content')
+        assert.equal(writeFileSync.mock.calls[0]?.arguments[0], 'dest')
+        assert.equal(writeFileSync.mock.calls[0]?.arguments[1]?.toString(), 'content')
       })
 
       void it('follows redirects', async (t) => {
         const writeFileSync = t.mock.method(fs, 'writeFileSync', () => undefined)
 
         assert.equal(await utils.downloadToFile(`${baseUrl}/redirect`, 'dest'), true)
-        assert.equal(writeFileSync.mock.calls[0].arguments[1].toString(), 'content')
+        assert.equal(writeFileSync.mock.calls[0]?.arguments[1]?.toString(), 'content')
       })
 
       void it('gives up after too many redirects', async (t) => {
         const writeFileSync = t.mock.method(fs, 'writeFileSync', () => undefined)
 
         assert.equal(await utils.downloadToFile(`${baseUrl}/loop`, 'dest'), false)
+        assert.equal(writeFileSync.mock.calls.length, 0)
+      })
+
+      void it('returns false for a redirect without a location header', async (t) => {
+        const writeFileSync = t.mock.method(fs, 'writeFileSync', () => undefined)
+
+        assert.equal(await utils.downloadToFile(`${baseUrl}/no-location`, 'dest'), false)
         assert.equal(writeFileSync.mock.calls.length, 0)
       })
 
