@@ -1,5 +1,8 @@
 name: "SonarQube Cloud"
 on:
+  push:
+    branches:
+      - master
   pull_request:
     types: [opened, synchronize, reopened]
 env:
@@ -40,5 +43,10 @@ jobs:
         run: sed -i 's|^SF:|SF:frontend/|' frontend/coverage/frontend/lcov.info
       - name: "SonarQube Cloud scan"
         uses: SonarSource/sonarqube-scan-action@c7ee0f9df90b7aa20e8dcf9695dcfe2e7da5b4f2 #v7.2.1
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      - uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b # v1.2.0
+        timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
