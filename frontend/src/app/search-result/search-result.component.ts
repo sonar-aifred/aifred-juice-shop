@@ -4,11 +4,15 @@
  */
 
 /* eslint-disable @typescript-eslint/prefer-for-of */
-import { ActivatedRoute, Router } from '@angular/router'
+import { ActivatedRoute, NavigationEnd, Router } from '@angular/router'
 import { ProductService } from '../Services/product.service'
 import { type AfterViewInit, Component, NgZone, type OnDestroy, ViewChild, ChangeDetectorRef, ElementRef, inject, ChangeDetectionStrategy } from '@angular/core'
 import { MatPaginator } from '@angular/material/paginator'
 import { BehaviorSubject, forkJoin, type Subscription } from 'rxjs'
+import { filter } from 'rxjs/operators'
+import { MatSelectModule } from '@angular/material/select'
+import { MatFormFieldModule } from '@angular/material/form-field'
+import { MatInputModule } from '@angular/material/input'
 import { MatTableDataSource } from '@angular/material/table'
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser'
 import { TranslateModule } from '@ngx-translate/core'
@@ -26,12 +30,19 @@ import { ProductComponent } from '../product/product.component'
 
 library.add(faEye, faCartPlus)
 
+type SortOption = 'name' | 'price-asc' | 'price-desc'
+const SORT_COMPARATORS: Record<SortOption, (a: ProductTableEntry, b: ProductTableEntry) => number> = {
+  name: (a, b) => a.name.localeCompare(b.name),
+  'price-asc': (a, b) => a.price - b.price,
+  'price-desc': (a, b) => b.price - a.price
+}
+
 @Component({
   changeDetection: ChangeDetectionStrategy.Eager,
   selector: 'app-search-result',
   templateUrl: './search-result.component.html',
   styleUrls: ['./search-result.component.scss'],
-  imports: [MatCardModule, TranslateModule, MatButtonModule, MatCardTitle, MatCardContent, MatPaginator, AsyncPipe, ProductComponent]
+  imports: [MatCardModule, TranslateModule, MatButtonModule, MatCardTitle, MatCardContent, MatPaginator, AsyncPipe, ProductComponent, MatSelectModule, MatFormFieldModule, MatInputModule]
 })
 export class SearchResultComponent implements OnDestroy, AfterViewInit {
   private readonly deluxeGuard = inject(DeluxeGuard)
@@ -48,8 +59,12 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
   public tableData!: ProductTableEntry[]
   public pageSizeOptions: number[] = []
   public dataSource!: MatTableDataSource<ProductTableEntry>
-  public gridDataSource!: BehaviorSubject<ProductTableEntry[]>
+  private _gridDataSource!: BehaviorSubject<ProductTableEntry[]>
   public searchValue?: SafeHtml
+  public sortOption: SortOption = 'name'
+  public maxPrice?: number
+  private allProducts: ProductTableEntry[] = []
+  private trackedDataSource?: MatTableDataSource<ProductTableEntry>
   public resultsLength = 0
   public currentPageSize = 15
   @ViewChild(MatPaginator, { static: true }) paginator!: MatPaginator
@@ -57,6 +72,21 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
   private gridDataSourceSubscription?: Subscription
   private resizeObserver?: ResizeObserver
   public emptyState = false
+
+  constructor () {
+    this.router.events.pipe(filter(event => event instanceof NavigationEnd)).subscribe(() => {
+      this.applySortAndPriceFilter()
+    })
+  }
+
+  get gridDataSource (): BehaviorSubject<ProductTableEntry[]> {
+    return this._gridDataSource
+  }
+
+  set gridDataSource (value: BehaviorSubject<ProductTableEntry[]>) {
+    this._gridDataSource = value
+    this.applySortAndPriceFilter()
+  }
 
   // vuln-code-snippet start restfulXssChallenge
   ngAfterViewInit () {
@@ -161,6 +191,40 @@ export class SearchResultComponent implements OnDestroy, AfterViewInit {
     }
   }
   // vuln-code-snippet end localXssChallenge xssBonusChallenge
+
+  onSortChange (sort: SortOption) {
+    this.updateQueryParams({ sort: sort === 'name' ? null : sort })
+  }
+
+  onMaxPriceChange (value: string) {
+    this.updateQueryParams({ maxPrice: value.trim() === '' ? null : value.trim() })
+  }
+
+  private updateQueryParams (queryParams: Record<string, string | null>) {
+    void this.router.navigate([], { queryParams, queryParamsHandling: 'merge' })
+  }
+
+  private applySortAndPriceFilter () {
+    // deferred so it runs after filterTable() has updated the text filter and empty state for the same navigation
+    queueMicrotask(() => {
+      if (!this.dataSource) return
+      const params = this.route.snapshot.queryParams
+      const sort: SortOption = (params.sort in SORT_COMPARATORS) ? params.sort : 'name'
+      const maxPrice = Number.parseFloat(params.maxPrice)
+      this.maxPrice = Number.isNaN(maxPrice) ? undefined : maxPrice
+
+      if (this.trackedDataSource !== this.dataSource) {
+        this.trackedDataSource = this.dataSource
+        this.allProducts = this.dataSource.data
+      }
+      this.sortOption = sort
+      this.dataSource.data = this.allProducts
+        .filter(product => this.maxPrice === undefined || product.price <= this.maxPrice)
+        .sort(SORT_COMPARATORS[sort])
+      this.emptyState = this.dataSource.filteredData.length === 0
+      this.cdRef.detectChanges()
+    })
+  }
 
   private setupResponsivePageSize () {
     const grid = this.elRef.nativeElement.querySelector('.products-grid')

@@ -415,6 +415,98 @@ describe('SearchResultComponent', () => {
         })
     })
 
+    describe('sorting and max price filter', () => {
+        const products = [
+            { id: 1, name: 'Banana', price: 3, description: 'd', image: 'i' },
+            { id: 2, name: 'Apple', price: 5, description: 'd', image: 'i' },
+            { id: 3, name: 'Cherry', price: 1, description: 'd', image: 'i' }
+        ]
+
+        async function applyParams (params: Record<string, string>) {
+            Object.assign(activatedRoute.snapshot.queryParams, params)
+            ;(component as any).applySortAndPriceFilter()
+            await Promise.resolve()
+        }
+
+        beforeEach(() => {
+            productService.search.mockReturnValue(of(products))
+            component.ngAfterViewInit()
+            fixture.detectChanges()
+        })
+
+        it('should sort by name by default', async () => {
+            await applyParams({})
+            expect(component.dataSource.data.map(p => p.name)).toEqual(['Apple', 'Banana', 'Cherry'])
+        })
+
+        it('should sort by price ascending', async () => {
+            await applyParams({ sort: 'price-asc' })
+            expect(component.dataSource.data.map(p => p.price)).toEqual([1, 3, 5])
+            expect(component.sortOption).toBe('price-asc')
+        })
+
+        it('should sort by price descending', async () => {
+            await applyParams({ sort: 'price-desc' })
+            expect(component.dataSource.data.map(p => p.price)).toEqual([5, 3, 1])
+        })
+
+        it('should fall back to name sorting for an unknown sort option', async () => {
+            await applyParams({ sort: 'bogus' })
+            expect(component.sortOption).toBe('name')
+        })
+
+        it('should hide products above the max price', async () => {
+            await applyParams({ maxPrice: '3' })
+            expect(component.maxPrice).toBe(3)
+            expect(component.dataSource.filteredData.map(p => p.name)).toEqual(['Banana', 'Cherry'])
+            expect(component.emptyState).toBe(false)
+        })
+
+        it('should ignore a non-numeric max price', async () => {
+            await applyParams({ maxPrice: 'abc' })
+            expect(component.maxPrice).toBeUndefined()
+            expect(component.dataSource.filteredData.length).toBe(3)
+        })
+
+        it('should show the empty state when no product is cheap enough', async () => {
+            await applyParams({ maxPrice: '0.5' })
+            expect(component.dataSource.filteredData.length).toBe(0)
+            expect(component.emptyState).toBe(true)
+        })
+
+        it('should combine the max price with the text filter', async () => {
+            activatedRoute.setQueryParameter('an')
+            component.filterTable()
+            await applyParams({ maxPrice: '2' })
+            expect(component.dataSource.filteredData.length).toBe(0)
+            await applyParams({ maxPrice: '3' })
+            expect(component.dataSource.filteredData.map(p => p.name)).toEqual(['Banana'])
+        })
+
+        it('should do nothing before the data source exists', async () => {
+            const freshComponent = TestBed.createComponent(SearchResultComponent).componentInstance
+            ;(freshComponent as any).applySortAndPriceFilter()
+            await Promise.resolve()
+            expect(freshComponent.dataSource).toBeUndefined()
+        })
+
+        it('should navigate with the merged sort query parameter', () => {
+            const navigate = vi.spyOn((component as any).router, 'navigate').mockResolvedValue(true)
+            component.onSortChange('price-asc')
+            expect(navigate).toHaveBeenCalledWith([], { queryParams: { sort: 'price-asc' }, queryParamsHandling: 'merge' })
+            component.onSortChange('name')
+            expect(navigate).toHaveBeenLastCalledWith([], { queryParams: { sort: null }, queryParamsHandling: 'merge' })
+        })
+
+        it('should navigate with the merged max price query parameter', () => {
+            const navigate = vi.spyOn((component as any).router, 'navigate').mockResolvedValue(true)
+            component.onMaxPriceChange(' 4 ')
+            expect(navigate).toHaveBeenCalledWith([], { queryParams: { maxPrice: '4' }, queryParamsHandling: 'merge' })
+            component.onMaxPriceChange('')
+            expect(navigate).toHaveBeenLastCalledWith([], { queryParams: { maxPrice: null }, queryParamsHandling: 'merge' })
+        })
+    })
+
     describe('ngOnDestroy cleanup', () => {
         it('should unsubscribe router and grid subscriptions, disconnect data source and resize observer', () => {
             productService.search.mockReturnValue(of([{ id: 1, name: 'Apple', price: 1, description: 'd', image: 'i' }]))

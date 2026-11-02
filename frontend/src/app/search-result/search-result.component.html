@@ -16,6 +16,21 @@
     <div id="search-result-heading"></div>
   </div>
 
+  <div class="search-controls">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>{{ "SORT_BY" | translate }}</mat-label>
+      <mat-select id="sort-select" [value]="sortOption" (selectionChange)="onSortChange($event.value)">
+        <mat-option value="name">{{ "SORT_NAME" | translate }}</mat-option>
+        <mat-option value="price-asc">{{ "SORT_PRICE_ASC" | translate }}</mat-option>
+        <mat-option value="price-desc">{{ "SORT_PRICE_DESC" | translate }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>{{ "MAX_PRICE" | translate }}</mat-label>
+      <input id="max-price-input" matInput type="number" min="0" [value]="maxPrice ?? ''" (change)="onMaxPriceChange($any($event.target).value)" />
+    </mat-form-field>
+  </div>
+
   @if (!emptyState) {
     <div class="products-grid">
       @for (item of gridDataSource | async; track item.id) {

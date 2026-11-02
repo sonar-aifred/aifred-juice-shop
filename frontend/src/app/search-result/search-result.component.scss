@@ -20,6 +20,13 @@
 
 }
 
+.search-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $space-m;
+  margin-bottom: $space-m;
+}
+
 .product {
   display: flex;
   flex-direction: column;
