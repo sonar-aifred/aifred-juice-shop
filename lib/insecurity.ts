@@ -106,17 +106,29 @@ export const userEmailFrom = ({ headers }: any) => {
   return headers ? headers['x-user-email'] : undefined
 }
 
+const couponSignature = (payload: string) => crypto.createHmac('sha256', privateKey).update('coupon:' + payload).digest('hex')
+
 export const generateCoupon = (discount: number, date = new Date()) => {
-  const coupon = utils.toMMMYY(date) + '-' + discount
-  return z85.encode(coupon)
+  const payload = utils.toMMMYY(date) + '-' + discount
+  return z85.encode(payload) + '_' + couponSignature(payload)
 }
 
 export const discountFromCoupon = (coupon?: string) => {
   if (!coupon) {
     return undefined
   }
-  const decoded = z85.decode(coupon)
+  const separatorIndex = coupon.lastIndexOf('_')
+  if (separatorIndex === -1) {
+    return undefined
+  }
+  const encoded = coupon.substring(0, separatorIndex)
+  const signature = coupon.substring(separatorIndex + 1)
+  const decoded = z85.decode(encoded)
   if (decoded && (hasValidFormat(decoded.toString()) != null)) {
+    const expectedSignature = couponSignature(decoded.toString())
+    if (signature.length !== expectedSignature.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+      return undefined
+    }
     const parts = decoded.toString().split('-')
     const validity = parts[0]
     if (utils.toMMMYY(new Date()) === validity) {
