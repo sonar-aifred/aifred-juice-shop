@@ -17,7 +17,8 @@ import * as utils from './utils'
 import * as z85 from 'z85'
 
 export const publicKey = fs ? fs.readFileSync('encryptionkeys/jwt.pub', 'utf8') : 'placeholder-public-key'
-const privateKey = fs ? fs.readFileSync('encryptionkeys/private.key', 'utf8') : 'placeholder-private-key'
+// Normalize to CRLF-separated lines without trailing newline so the key bytes (also used as HMAC salt for deluxe tokens) stay stable across checkouts
+const privateKey = fs ? fs.readFileSync('encryptionkeys/private.key', 'utf8').trim().replace(/\r?\n/g, '\r\n') : 'placeholder-private-key'
 
 interface ResponseWithUser {
   status?: string
