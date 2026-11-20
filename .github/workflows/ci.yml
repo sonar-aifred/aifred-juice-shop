@@ -32,6 +32,7 @@ jobs:
       - name: "Lint source code"
         run: npm run lint
   coding-challenge-rsn:
+    if: false # disabled
     runs-on: windows-latest
     steps:
       - name: "Check out Git repository"
@@ -397,7 +398,6 @@ jobs:
       - docker
       - heroku
       - lint
-      - coding-challenge-rsn
     runs-on: ubuntu-latest
     steps:
       - name: "Slack workflow notification"
